@@ -15,10 +15,11 @@ return [
     */
 
     'client' => env('REDIS_CLIENT', 'phpredis'),
+    'key_prefix' => env('REDIS_KEY_PREFIX', 'laravel'),
 
     'options' => [
         'cluster' => env('REDIS_CLUSTER', 'redis'),
-        'prefix' => env('REDIS_PREFIX', Str::slug((string) config('app.name', 'laravel')).'-database-'),
+        'prefix' => env('REDIS_PREFIX', ''),
         'persistent' => env('REDIS_PERSISTENT', false),
     ],
 
