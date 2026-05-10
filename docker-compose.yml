@@ -1,10 +1,8 @@
-version: "3.9"
-
 services:
 
   postgres:
     image: postgres:16
-    container_name: postgres
+    container_name: postgres-laravel-all-in-one
     environment:
       POSTGRES_DB: laravel
       POSTGRES_USER: laravel
@@ -16,20 +14,20 @@ services:
 
   redis:
     image: redis:latest
-    container_name: redis
+    container_name: redis-laravel-all-in-one
     ports:
       - "6379:6379"
 
   rabbitmq:
     image: rabbitmq:3-management
-    container_name: rabbitmq
+    container_name: rabbitmq-laravel-all-in-one
     ports:
       - "5672:5672"
       - "15672:15672"
 
   elasticsearch:
     image: elasticsearch:9.2.0
-    container_name: elasticsearch
+    container_name: elasticsearch-laravel-all-in-one
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false
@@ -38,7 +36,7 @@ services:
 
   kibana:
     image: kibana:9.2.0
-    container_name: kibana
+    container_name: kibana-laravel-all-in-one
     environment:
       ELASTICSEARCH_HOSTS: http://elasticsearch:9200
       xpack.security.enabled: "false"
