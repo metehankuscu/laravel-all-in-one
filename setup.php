@@ -11,6 +11,7 @@
  *   php setup.php                     Interactive: choose .env copy + which Docker services
  *   php setup.php -y                  Non-interactive: all compose services + full setup
  *   php setup.php -y --no-docker      No containers; still runs composer, key, optimize, migrate
+ *   php setup.php -y --no-npm           Skip npm install and npm run build
  *   php setup.php --help
  *
  * Composer install, key:generate, optimize, migrate and connections:check always run (no prompts).
@@ -19,17 +20,19 @@
 /**
  * Parse CLI arguments
  *
- * @return array{help: bool, non_interactive: bool, no_docker: bool}
+ * @return array{help: bool, non_interactive: bool, no_docker: bool, no_npm: bool}
  */
 function parseSetupArgv(array $argv): array {
     $help = in_array('--help', $argv, true) || in_array('-h', $argv, true);
     $nonInteractive = in_array('-y', $argv, true) || in_array('--yes', $argv, true);
     $noDocker = in_array('--no-docker', $argv, true);
+    $noNpm = in_array('--no-npm', $argv, true);
 
     return [
         'help' => $help,
         'non_interactive' => $nonInteractive,
         'no_docker' => $noDocker,
+        'no_npm' => $noNpm,
     ];
 }
 
@@ -60,11 +63,13 @@ echo "\n";
 $cli = parseSetupArgv($argv);
 if ($cli['help']) {
     echo "Options:\n";
-    echo "  (none)        Ask: copy .env (if missing)? Which Docker services to start?\n";
+    echo "  (none)        Ask: copy .env (if missing)? npm install + build? Which Docker services?\n";
     echo "                postgres, redis, rabbitmq, elasticsearch, kibana (each opt-in).\n";
     echo "                Always runs: composer install, key:generate (if needed), optimize, migrate.\n";
-    echo "  -y, --yes     No prompts: copy .env if missing, start all Docker services (unless --no-docker).\n";
+    echo "  -y, --yes     No prompts: copy .env if missing, start all Docker services (unless --no-docker),\n";
+    echo "                run npm install + npm run build (unless --no-npm).\n";
     echo "  --no-docker   Do not start any Docker services.\n";
+    echo "  --no-npm      Do not run npm install or npm run build.\n";
     echo "  -h, --help    Show this help.\n";
     echo "\n";
     exit(0);
@@ -240,14 +245,16 @@ function serviceEndpointLines(array $started): array {
     return $lines;
 }
 
-// --- User choices: only .env copy + Docker services (everything else runs automatically) ---
+// --- User choices: .env copy, Docker services, npm assets (everything else runs automatically) ---
 $servicePick = defaultAllDockerServices();
 $runEnvCopy = !fileExists('.env') && fileExists('.env.example');
+$runNpm = false;
 
 if ($cli['non_interactive']) {
     if ($cli['no_docker']) {
         $servicePick = array_map(static fn () => false, defaultAllDockerServices());
     }
+    $runNpm = !$cli['no_npm'] && fileExists('package.json');
 } else {
     echo "📌 Setup options (composer install, key, optimize, and migrate run automatically).\n\n";
 
@@ -255,6 +262,10 @@ if ($cli['non_interactive']) {
         $runEnvCopy = promptYesNo('Copy .env from .env.example?', true);
     } else {
         $runEnvCopy = false;
+    }
+
+    if (fileExists('package.json')) {
+        $runNpm = promptYesNo('Run npm install and npm run build (frontend assets)?', false);
     }
 
     if (!$cli['no_docker'] && fileExists('docker-compose.yml')) {
@@ -298,6 +309,15 @@ if ($runDocker) {
     } else {
         echo "❌ Docker is NOT installed\n";
         $missingPrerequisites[] = 'Docker';
+    }
+}
+
+if ($runNpm) {
+    if (commandExists('npm')) {
+        echo "✅ npm is installed\n";
+    } else {
+        echo "❌ npm is NOT installed\n";
+        $missingPrerequisites[] = 'npm';
     }
 }
 
@@ -370,7 +390,28 @@ if (!fileExists('.env')) {
     }
 }
 
-// Step 4: Docker — only selected services
+// Step 4: Frontend assets (optional)
+if ($runNpm) {
+    if (!fileExists('node_modules')) {
+        echo "🔄 Installing npm dependencies...\n";
+        echo "⏰ ⚠️  This process may take 1-2 minutes. Please wait...\n\n";
+    } else {
+        echo "🔄 Syncing npm dependencies (npm install)...\n\n";
+    }
+    if (!executeCommand('npm install', 'Installing npm dependencies', true)) {
+        echo "❌ Setup failed at: Installing npm dependencies\n";
+        exit(1);
+    }
+    if (!executeCommand('npm run build', 'Building frontend assets', false)) {
+        echo "⚠️  Frontend build failed, but continuing...\n\n";
+    }
+} else {
+    echo "ℹ️  npm install and npm run build skipped by choice.\n\n";
+    $steps[] = ['status' => 'skipped', 'description' => 'Installing npm dependencies'];
+    $steps[] = ['status' => 'skipped', 'description' => 'Building frontend assets'];
+}
+
+// Step 5: Docker — only selected services
 if ($runDocker) {
     $implicitEs = in_array('elasticsearch', $dockerServiceList, true)
         && empty($servicePick['elasticsearch'])
@@ -399,18 +440,18 @@ if ($runDocker) {
     $steps[] = ['status' => 'skipped', 'description' => 'Starting Docker containers'];
 }
 
-// Step 5: Optimize Laravel (always)
+// Step 6: Optimize Laravel (always)
 if (!executeCommand('php artisan optimize', 'Optimizing Laravel application', false)) {
     echo "⚠️  Optimization failed, but continuing...\n\n";
 }
 
-// Step 6: Migrations (always)
+// Step 7: Migrations (always)
 if (!executeCommand('php artisan migrate --force', 'Running database migrations', true)) {
     echo "❌ Setup failed at: Running database migrations\n";
     exit(1);
 }
 
-// Step 7: Connections check (always, best-effort)
+// Step 8: Connections check (always, best-effort)
 echo "🔄 Checking service connections...\n";
 $connectionCheck = executeCommand('php artisan connections:check', 'Checking service connections', false);
 
