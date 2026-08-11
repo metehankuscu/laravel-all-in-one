@@ -1,7 +1,7 @@
 services:
 
   postgres:
-    image: postgres:16
+    image: postgres:18.4
     container_name: postgres-laravel-all-in-one
     environment:
       POSTGRES_DB: laravel
@@ -10,32 +10,68 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      # Postgres 18+ stores data under a version-specific PGDATA
+      # (/var/lib/postgresql/18/docker), so the volume mounts one level up.
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U laravel -d laravel"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   redis:
-    image: redis:latest
+    image: redis:8.10
     container_name: redis-laravel-all-in-one
     ports:
       - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   rabbitmq:
-    image: rabbitmq:3-management
+    image: rabbitmq:4.3-management
     container_name: rabbitmq-laravel-all-in-one
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
     ports:
       - "5672:5672"
       - "15672:15672"
+    volumes:
+      - rabbitmqdata:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
 
   elasticsearch:
-    image: elasticsearch:9.2.0
+    image: elasticsearch:9.4.4
     container_name: elasticsearch-laravel-all-in-one
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
     ports:
       - "9200:9200"
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9200/_cluster/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
 
   kibana:
-    image: kibana:9.2.0
+    image: kibana:9.4.4
     container_name: kibana-laravel-all-in-one
     environment:
       ELASTICSEARCH_HOSTS: http://elasticsearch:9200
@@ -43,7 +79,11 @@ services:
     ports:
       - "5601:5601"
     depends_on:
-      - elasticsearch
+      elasticsearch:
+        condition: service_healthy
 
 volumes:
   pgdata:
+  redisdata:
+  rabbitmqdata:
+  esdata:

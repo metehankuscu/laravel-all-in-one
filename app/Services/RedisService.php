@@ -47,7 +47,7 @@ class RedisService
      * @param int|null $ttl Time to live in seconds (null = no expiration)
      * @return void
      */
-    public function set(string $key, mixed $value, int $ttl = null): void
+    public function set(string $key, mixed $value, ?int $ttl = null): void
     {
         $data = is_array($value) ? json_encode($value) : $value;
 
