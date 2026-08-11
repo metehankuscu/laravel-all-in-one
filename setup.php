@@ -222,10 +222,10 @@ function serviceEndpointLines(array $started): array {
     $set = array_flip($started);
 
     if (isset($set['postgres'])) {
-        $lines[] = 'PostgreSQL: 127.0.0.1:15432';
+        $lines[] = 'PostgreSQL: 127.0.0.1:5432';
     }
     if (isset($set['redis'])) {
-        $lines[] = 'Redis: 127.0.0.1:16379';
+        $lines[] = 'Redis: 127.0.0.1:6379';
     }
     if (isset($set['rabbitmq'])) {
         $lines[] = 'RabbitMQ management UI: http://127.0.0.1:15672';
